@@ -1,80 +1,93 @@
+/* eslint-disable no-unused-vars */
 import { useRef, useState } from "react";
-import { Camera, Square } from "lucide-react";
 
 export default function LiveView() {
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const [active, setActive] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
 
-  const handleStart = async () => {
+  const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: false
       });
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setActive(true);
-      }
+      videoRef.current.srcObject = stream;
+      setActive(true);
     } catch (err) {
-      console.error("Camera access denied:", err);
-      alert("Camera not accessible. Check permissions.");
+      alert("Camera access denied");
     }
   };
 
-  const handleStop = () => {
-    if (videoRef.current?.srcObject) {
-      const tracks = videoRef.current.srcObject.getTracks();
-      tracks.forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-      setActive(false);
-    }
+  const stopCamera = () => {
+    const tracks = videoRef.current?.srcObject?.getTracks();
+    tracks?.forEach(track => track.stop());
+    videoRef.current.srcObject = null;
+    setActive(false);
+  };
+
+  const captureAndAnalyze = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(async (blob) => {
+      setLoading(true);
+      setResult(null);
+
+      const formData = new FormData();
+      formData.append("file", blob, "frame.jpg");
+
+      const res = await fetch("http://127.0.0.1:8000/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      setResult(data);
+      setLoading(false);
+    }, "image/jpeg", 0.9);
   };
 
   return (
-    <div className="flex flex-col items-center space-y-5">
-
-      {/* Title */}
-      <div className="text-center space-y-1">
-        <h2 className="text-xl font-semibold">Live Deepfake Detection</h2>
-        <p className="text-slate-400">
-          Use your camera to check if you're being viewed through a deepfake filter in real-time.
-        </p>
+    <div className="flex flex-col items-center text-center space-y-4 w-full">
+      
+      {/* VIDEO FEED */}
+      <div className="relative border border-slate-700 rounded-lg overflow-hidden w-full max-w-xl bg-black">
+        <video ref={videoRef} autoPlay playsInline className="w-full h-[350px] object-cover" />
+        {!active && <div className="absolute inset-0 flex items-center justify-center text-slate-400">Camera Off</div>}
       </div>
 
-      {/* Video Container */}
-      <div className="relative w-full max-w-xl rounded-xl overflow-hidden border border-slate-800 bg-black">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          className="w-full h-[350px] object-cover"
-        />
-        
-        {!active && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-slate-300 text-sm">
-            Camera feed inactive
-          </div>
-        )}
-      </div>
-
-      {/* Controls */}
+      {/* ACTION BUTTONS */}
       {!active ? (
-        <button
-          onClick={handleStart}
-          className="flex items-center gap-2 bg-cyan-600 px-4 py-2 rounded-lg hover:bg-cyan-500 transition"
-        >
-          <Camera className="w-4 h-4" /> Start Camera
-        </button>
+        <button onClick={startCamera} className="px-4 py-2 bg-cyan-600 rounded-lg">Start Camera</button>
       ) : (
-        <button
-          onClick={handleStop}
-          className="flex items-center gap-2 bg-red-600 px-4 py-2 rounded-lg hover:bg-red-500 transition"
-        >
-          <Square className="w-4 h-4" /> Stop Camera
-        </button>
+        <div className="flex gap-3">
+          <button onClick={stopCamera} className="px-4 py-2 bg-red-600 rounded-lg">Stop</button>
+          <button onClick={captureAndAnalyze} disabled={loading} className="px-4 py-2 bg-blue-600 rounded-lg">
+            {loading ? "Analyzing..." : "Capture & Analyze"}
+          </button>
+        </div>
       )}
 
+      {/* HIDDEN CANVAS */}
+      <canvas ref={canvasRef} className="hidden"></canvas>
+
+      {/* RESULTS */}
+      {result && (
+        <div className="p-3 bg-slate-800 rounded-lg border border-slate-700 w-full max-w-xl text-left">
+          <p className="font-semibold">Trust Score: {result.trustScore}%</p>
+          <p>Verdict: {result.verdict}</p>
+          <p className="text-slate-400 text-sm mt-2">{result.details}</p>
+        </div>
+      )}
     </div>
   );
 }
