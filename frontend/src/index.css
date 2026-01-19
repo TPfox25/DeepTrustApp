@@ -1,0 +1,5 @@
+@import "tailwindcss";
+
+html, body {
+  @apply w-full min-h-screen bg-slate-950 text-white overflow-x-hidden;
+}
