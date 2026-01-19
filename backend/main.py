@@ -1,31 +1,40 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-import uuid
+import shutil
+import random
 
 app = FastAPI()
 
-# Allow local frontend during development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # later we restrict this
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 @app.post("/analyze")
-async def analyze_file(file: UploadFile = File(...)):
-    # Generate dummy scores (placeholder for AI)
-    fake_result = {
-        "id": str(uuid.uuid4()),
-        "fileName": file.filename,
-        "type": "image" if file.content_type.startswith("image") else "video",
-        "faceScore": 78,
-        "motionScore": 82,
-        "audioScore": 0 if file.content_type.startswith("image") else 76,
-        "trustScore": 81,
-        "verdict": "likely_authentic",
-        "details": "No significant deepfake artifacts detected."
-    }
+async def analyze(file: UploadFile = File(...)):
+    # Save file temporarily (not required for ML, just placeholder)
+    with open(f"temp_{file.filename}", "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-    return fake_result
+    # MOCK result — this will be replaced with real ML later
+    trust_score = random.randint(20, 99)
+
+    if trust_score >= 75:
+        verdict = "likely_authentic"
+    elif trust_score >= 40:
+        verdict = "suspicious"
+    else:
+        verdict = "likely_fake"
+
+    return {
+        "trustScore": trust_score,
+        "verdict": verdict,
+        "faceScore": random.randint(30, 95),
+        "motionScore": random.randint(30, 95),
+        "audioScore": random.randint(30, 95),
+        "details": "This is a mock inference. Real model results coming soon.",
+        "type": file.content_type
+    }

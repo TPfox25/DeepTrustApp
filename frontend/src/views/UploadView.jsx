@@ -1,88 +1,82 @@
-import { useState, useRef } from "react";
-import { Upload } from "lucide-react";
+import { useState } from "react";
+import VerdictBadge from "../components/VerdictBadge";
+import TrustGauge from "../components/TrustGauge";
+import ScoreBar from "../components/ScoreBar";
 
 export default function UploadView() {
-  const inputRef = useRef(null);
   const [file, setFile] = useState(null);
-  const [previewURL, setPreviewURL] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
 
-  const handleOpenPicker = () => {
-    inputRef.current?.click();
-  };
+  const handleUpload = async () => {
+    if (!file) return;
 
-  const handleFileChange = (e) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
+    setLoading(true);
+    setResult(null);
 
-    // Validate basic formats for MVP
-    const valid = ["image", "video"];
-    if (!valid.some(type => selected.type.startsWith(type))) {
-      alert("Unsupported file type. Please upload an image or video.");
-      return;
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      setResult(data);
+    } catch (err) {
+      console.error(err);
     }
 
-    setFile(selected);
-
-    // Preview for images/videos
-    const url = URL.createObjectURL(selected);
-    setPreviewURL(url);
-  };
-
-  const handleAnalyze = () => {
-    if (!file) return;
-    alert(`Ready to send "${file.name}" to backend for analysis!`);
+    setLoading(false);
   };
 
   return (
-    <div className="flex flex-col items-center text-center space-y-4">
+    <div className="w-full max-w-xl mx-auto mt-12 p-6 rounded-xl border border-slate-700 bg-slate-900/60 backdrop-blur-xl text-white">
+      <h2 className="text-xl font-semibold text-center mb-4">Upload Video / Image</h2>
 
-      {/* Title */}
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold">Upload Deepfake Detection</h2>
-        <p className="text-slate-400">Upload images or videos to analyze authenticity.</p>
-      </div>
-
-      {/* Upload Box */}
-      <div
-        onClick={handleOpenPicker}
-        className="cursor-pointer flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-6 w-full max-w-xl bg-slate-900/60 hover:bg-slate-900/80 transition"
-      >
-        <Upload className="w-8 h-8 text-cyan-400 mb-3" />
-        <p className="text-sm text-slate-400">Click to upload or drag & drop</p>
-      </div>
-
-      {/* Hidden Input */}
       <input
-        ref={inputRef}
         type="file"
-        accept="video/*,image/*"
-        onChange={handleFileChange}
-        className="hidden"
+        accept="image/*,video/*"
+        onChange={(e) => setFile(e.target.files[0])}
+        className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer mb-4"
       />
 
-      {/* Preview */}
-      {previewURL && (
-        <div className="w-full max-w-xl space-y-3">
-          <div className="rounded-xl overflow-hidden border border-slate-800 bg-black">
-            {file.type.startsWith("image") ? (
-              <img src={previewURL} alt="preview" className="w-full object-cover" />
-            ) : (
-              <video src={previewURL} controls className="w-full object-cover" />
-            )}
-          </div>
+      <button
+        onClick={handleUpload}
+        disabled={!file || loading}
+        className="w-full py-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition"
+      >
+        {loading ? "Analyzing..." : "Analyze"}
+      </button>
 
-          <p className="text-sm text-slate-400">
-            <span className="font-semibold text-white">{file.name}</span> — {(file.size / 1024 / 1024).toFixed(2)}MB
-          </p>
+      {result && (
+  <div className="mt-6 p-4 rounded-lg bg-slate-800 border border-slate-700 space-y-4">
+    {/* Top Row */}
+    <div className="flex items-center justify-between">
+      <h3 className="text-lg font-semibold">Analysis Results</h3>
+      <VerdictBadge verdict={result.verdict} />
+    </div>
 
-          <button
-            onClick={handleAnalyze}
-            className="bg-cyan-600 px-4 py-2 rounded-lg hover:bg-cyan-500 transition"
-          >
-            Analyze
-          </button>
-        </div>
+    {/* Gauge */}
+    <div className="flex justify-center">
+      <TrustGauge score={result.trustScore} />
+    </div>
+
+    {/* Breakdown */}
+    <div className="space-y-3">
+      <ScoreBar label="Face Analysis" value={result.faceScore} />
+      <ScoreBar label="Motion Analysis" value={result.motionScore} />
+      {!result.type.startsWith("image") && (
+        <ScoreBar label="Audio Analysis" value={result.audioScore} />
       )}
+    </div>
+
+    {/* Details */}
+    <p className="text-sm text-slate-400 mt-3">{result.details}</p>
+  </div>
+)}
     </div>
   );
 }
